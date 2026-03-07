@@ -1,0 +1,21 @@
+{
+    "name": "mcp-omv",
+    "version": "0.1.0",
+    "description": "MCP server for OpenMediaVault and Docker management",
+    "main": "build/index.js",
+    "type": "module",
+    "scripts": {
+        "build": "tsc",
+        "start": "node build/index.js",
+        "dev": "tsc --watch"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "latest",
+        "ssh2": "^1.15.0"
+    },
+    "devDependencies": {
+        "@types/node": "latest",
+        "@types/ssh2": "^1.15.0",
+        "typescript": "latest"
+    }
+}
