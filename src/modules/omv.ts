@@ -319,7 +319,7 @@ export const omvModule: McpModule = {
             const projectMatch = labelsStr.match(/com\.docker\.compose\.project=([^,]+)/);
             const serviceMatch = labelsStr.match(/com\.docker\.compose\.service=([^,]+)/);
 
-            const projectName = projectMatch ? projectMatch[1] : "Unknown";
+            const projectName = projectMatch ? projectMatch[1] : "Unknown (Not OMV-managed?)";
             const serviceName = serviceMatch ? serviceMatch[1] : containerName;
 
             const statsInfo = statsLine ? statsLine.split('|').slice(1).join('|').trim() : "Stats unavailable";
@@ -334,8 +334,8 @@ export const omvModule: McpModule = {
 
         if (name === "manage_container") {
             const { name: containerName, action } = args as { name: string; action: string };
-            // Robust JSON quoting for RPC: escape double quotes for shell safety
-            const rpcParams = JSON.stringify({ name: containerName, command: action }).replace(/"/g, '\\"');
+            // OMV 7 doContainerCommand requires 'id' parameter (can be name or short ID)
+            const rpcParams = JSON.stringify({ id: containerName, command: action });
             const cmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${rpcParams}'`;
 
             await executeOnNas(cmd);
@@ -350,7 +350,7 @@ export const omvModule: McpModule = {
         if (name === "update_container") {
             const { name: containerName } = args as { name: string };
 
-            // 1. Identify the PROJECT (stack) name for this container
+            // 1. Identify the PROJECT (stack) name for this container via labels
             const psRaw = await executeOnNas(`sudo docker ps --format "{{.Names}} | {{.Labels}}"`).catch(() => "");
             const psLine = psRaw.split('\n').find(l => l.trim().startsWith(`${containerName} |`));
 
@@ -367,9 +367,27 @@ export const omvModule: McpModule = {
 
             const projectName = projectMatch[1];
 
-            // 2. Perform Pull then Up on the PROJECT stack to respect original tags
-            const pullParams = JSON.stringify({ name: projectName, command: "pull" }).replace(/"/g, '\\"');
-            const upParams = JSON.stringify({ name: projectName, command: "up" }).replace(/"/g, '\\"');
+            // 2. Find the UUID of the project in OMV
+            // Using search parameter to find the specific project
+            const filesRaw = await executeOnNas(`sudo /usr/sbin/omv-rpc -u admin 'Compose' 'getFileList' '{"start":0,"limit":10,"search":"${projectName}"}'`);
+            let filesData;
+            try {
+                filesData = JSON.parse(filesRaw);
+            } catch (e) {
+                throw new Error(`Failed to parse OMV project list: ${filesRaw}`);
+            }
+
+            const project = (filesData.data || []).find((f: any) => f.name === projectName);
+            if (!project) {
+                return { content: [{ type: "text", text: `❌ Could not find OMV Project named **${projectName}** in the file list.` }] };
+            }
+
+            const projectUuid = project.uuid;
+
+            // 3. Perform Pull then Up on the PROJECT stack using the UUID
+            // command and command2 are required for docker compose args
+            const pullParams = JSON.stringify({ uuid: projectUuid, command: "pull" });
+            const upParams = JSON.stringify({ uuid: projectUuid, command: "up", command2: "-d" });
 
             const pullCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doCommand' '${pullParams}'`;
             const upCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doCommand' '${upParams}'`;
@@ -380,7 +398,7 @@ export const omvModule: McpModule = {
             return {
                 content: [{
                     type: "text",
-                    text: `🚀 Update sequence (Pull + Up) triggered for stack **${projectName}** (containing ${containerName}). OMV will pull the latest version of the configured tag and restart the service.`
+                    text: `🚀 Update sequence (Pull + Up -d) triggered for stack **${projectName}** (ID: ${projectUuid}). OMV is now pulling the latest images and restarting the services in the background.`
                 }]
             };
         }
