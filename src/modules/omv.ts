@@ -58,6 +58,11 @@ export const omvModule: McpModule = {
                     }
                 },
             },
+            {
+                name: "check_docker_updates",
+                description: "Check for available updates for Docker images via OMV Compose API",
+                inputSchema: { type: "object", properties: {} },
+            },
         ];
     },
     async handleCall(name, args, executeOnNas) {
@@ -224,6 +229,35 @@ export const omvModule: McpModule = {
                 ],
             };
         }
+
+        if (name === "check_docker_updates") {
+            const cmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'getImages' '{}'`;
+            const result = await executeOnNas(cmd);
+            let data;
+            try { data = JSON.parse(result); } catch (e) { throw new Error(`Parse error: ${result.substring(0, 100)}...`); }
+
+            if (!data.data || !Array.isArray(data.data)) {
+                return { content: [{ type: "text", text: "No Docker images found." }] };
+            }
+
+            const updates = data.data.filter((img: any) => img.status === "AVAILABLE");
+
+            if (updates.length === 0) {
+                return { content: [{ type: "text", text: "✅ All Docker images are up to date." }] };
+            }
+
+            const formatted = updates.map((img: any) =>
+                `- **${img.repo}** (ID: ${img.id.substring(7, 19)}) ⚠️ Update Available`
+            ).join('\n');
+
+            return {
+                content: [{
+                    type: "text",
+                    text: `🐳 Docker Image Updates Available:\n${formatted}\n\n*Note: Use 'docker-compose pull' on your NAS to update these images.*`
+                }]
+            };
+        }
+
 
         return null; // Not meant for this module
     }
