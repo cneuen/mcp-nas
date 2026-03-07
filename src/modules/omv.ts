@@ -48,6 +48,16 @@ export const omvModule: McpModule = {
                 description: "Get the status of software RAID (mdadm) arrays",
                 inputSchema: { type: "object", properties: {} },
             },
+            {
+                name: "get_top_processes",
+                description: "List the most resource-intensive processes currently running on the NAS",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        count: { type: "number", description: "Number of processes to show (default: 10)", default: 10 }
+                    }
+                },
+            },
         ];
     },
     async handleCall(name, args, executeOnNas) {
@@ -191,6 +201,27 @@ export const omvModule: McpModule = {
                     type: "text",
                     text: `Software RAID Status:\n\`\`\`\n${cleanMdstat}\n\`\`\``
                 }]
+            };
+        }
+
+        if (name === "get_top_processes") {
+            const { count = 10 } = args as { count?: number };
+            // Get load average and top processes
+            const uptimeRaw = await executeOnNas("uptime");
+            const psRaw = await executeOnNas(`ps aux --sort=-%cpu | head -n ${count + 1}`);
+
+            // Format output
+            const lines = psRaw.split('\n');
+            const header = lines[0];
+            const processes = lines.slice(1).join('\n').trim();
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `🚀 System Load & Top Processes:\n${uptimeRaw}\n\nTop ${count} processes by CPU usage:\n\`\`\`\n${header}\n${processes}\n\`\`\``,
+                    },
+                ],
             };
         }
 
