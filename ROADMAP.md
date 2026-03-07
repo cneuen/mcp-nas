@@ -11,9 +11,9 @@ This document outlines the planned features, improvements, and future directions
 - [ ] **Volume Monitoring**: Track volume usage.
 
 ### 📊 Advanced System Monitoring & Hardware
-- [ ] **RAID Monitoring**: Status of RAID arrays (via `mdadm` or OMV API).
-- [ ] **Detailed HDD Info**: Disk models, serial numbers, and wear levels.
-- [ ] **Temperature Sensors**: Monitor CPU and HDD temperatures (via `smartctl`).
+- [x] **RAID Monitoring**: Status of RAID arrays (via `mdadm` or OMV API).
+- [x] **Detailed HDD Info**: Disk models, serial numbers, and wear levels.
+- [x] **Temperature Sensors**: Monitor CPU and HDD temperatures (via `smartctl`).
 - [ ] **Process Manager**: List top processes by CPU/RAM.
 - [ ] **Network Traffic**: Real-time bandwidth monitoring.
 - [ ] **GPU Status**: Support for NVIDIA/Intel GPU monitoring if available.
