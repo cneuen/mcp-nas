@@ -29,7 +29,7 @@ const server = new Server(
  */
 const NAS_HOST = process.env.NAS_HOST || "192.168.1.27";
 const NAS_PORT = parseInt(process.env.NAS_PORT || "8822");
-const NAS_USER = process.env.NAS_USER || "cneuen";
+const NAS_USER = process.env.NAS_USER || "root";
 const NAS_KEY_PATH = process.env.NAS_KEY_PATH; // Optional
 
 /**
@@ -39,6 +39,7 @@ async function executeOnNas(command: string): Promise<string> {
     return new Promise((resolve, reject) => {
         const conn = new Client();
         conn.on("ready", () => {
+            console.error("SSH: Connected and authenticated successfully");
             conn.exec(command, (err, stream) => {
                 if (err) {
                     conn.end();
@@ -60,8 +61,11 @@ async function executeOnNas(command: string): Promise<string> {
                 });
             });
         }).on("error", (err) => {
+            console.error("SSH Connection Error:", err.message);
             reject(err);
         });
+
+        console.error(`SSH: Attempting connection to ${NAS_HOST}:${NAS_PORT} as ${NAS_USER}`);
 
         const connectConfig: ConnectConfig = {
             host: NAS_HOST,
@@ -72,7 +76,16 @@ async function executeOnNas(command: string): Promise<string> {
         };
 
         if (NAS_KEY_PATH) {
-            connectConfig.privateKey = fs.readFileSync(NAS_KEY_PATH);
+            try {
+                console.error(`SSH: Reading key from ${NAS_KEY_PATH}`);
+                const keyData = fs.readFileSync(NAS_KEY_PATH);
+                console.error(`SSH: Key loaded, size: ${keyData.length} bytes`);
+                connectConfig.privateKey = keyData;
+            } catch (keyErr: any) {
+                console.error(`SSH: Failed to read key file: ${keyErr.message}`);
+            }
+        } else {
+            console.error("SSH: No NAS_KEY_PATH provided, attempting other methods (agent/password)");
         }
 
         conn.connect(connectConfig);
