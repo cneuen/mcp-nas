@@ -63,6 +63,40 @@ export const omvModule: McpModule = {
                 description: "Check for available updates for Docker images via OMV Compose API",
                 inputSchema: { type: "object", properties: {} },
             },
+            {
+                name: "get_container_info",
+                description: "Get detailed information about a Docker container (ID, Version, Stats, Logs)",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string", description: "Container name or ID" }
+                    },
+                    required: ["name"]
+                },
+            },
+            {
+                name: "manage_container",
+                description: "Start, Stop, or Restart a Docker container",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string", description: "Container name" },
+                        action: { type: "string", enum: ["start", "stop", "restart"], description: "Action to perform" }
+                    },
+                    required: ["name", "action"]
+                },
+            },
+            {
+                name: "update_container",
+                description: "Pull the latest image and restart (Update) a Docker container",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string", description: "Container name" }
+                    },
+                    required: ["name"]
+                },
+            },
         ];
     },
     async handleCall(name, args, executeOnNas) {
@@ -258,6 +292,55 @@ export const omvModule: McpModule = {
             };
         }
 
+        if (name === "get_container_info") {
+            const { name: containerName } = args as { name: string };
+            // Retrieve basic info, stats, and logs using allowed sudo commands
+            const psInfo = await executeOnNas(`sudo docker ps --filter "name=${containerName}" --format "{{.ID}} | {{.Image}} | {{.CreatedAt}} | {{.Status}}"`).catch(() => "Not found");
+            const statsInfo = await executeOnNas(`sudo docker stats --no-stream --format "{{.CPUPerc}} | {{.MemUsage}}" ${containerName}`).catch(() => "Stats unavailable");
+            const logsInfo = await executeOnNas(`sudo docker logs --tail 50 ${containerName}`).catch(() => "Logs unavailable");
+
+            return {
+                content: [{
+                    type: "text",
+                    text: `📦 Detailed Info for: **${containerName}**\n\n**Metadata (ID | Image | Created | Status):**\n\`${psInfo.trim()}\`\n\n**Resource Usage (CPU | RAM):**\n\`${statsInfo.trim()}\`\n\n**Recent Logs (Last 50 lines):**\n\`\`\`\n${logsInfo}\n\`\`\``
+                }]
+            };
+        }
+
+        if (name === "manage_container") {
+            const { name: containerName, action } = args as { name: string; action: string };
+            // OMV Compose doContainerCommand: action can be start, stop, restart
+            const rpcParams = JSON.stringify({ name: containerName, command: action });
+            const cmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${rpcParams}'`;
+
+            await executeOnNas(cmd);
+            return {
+                content: [{
+                    type: "text",
+                    text: `✅ Action **${action}** triggered for container **${containerName}** via OMV Compose.`
+                }]
+            };
+        }
+
+        if (name === "update_container") {
+            const { name: containerName } = args as { name: string };
+            // Perform Pull then Up to update
+            const pullParams = JSON.stringify({ name: containerName, command: "pull" });
+            const upParams = JSON.stringify({ name: containerName, command: "up" });
+
+            const pullCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${pullParams}'`;
+            const upCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${upParams}'`;
+
+            await executeOnNas(pullCmd);
+            await executeOnNas(upCmd);
+
+            return {
+                content: [{
+                    type: "text",
+                    text: `🚀 Update sequence (Pull + Up) triggered for container **${containerName}**. This may take a moment to complete in the background.`
+                }]
+            };
+        }
 
         return null; // Not meant for this module
     }

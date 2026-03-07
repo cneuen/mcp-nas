@@ -5,7 +5,7 @@ This document outlines the planned features, improvements, and future directions
 ## 🚀 Upcoming Features
 
 ### 🐳 Enhanced Docker Controls
-- [ ] **Container Lifecycle**: `start`, `stop`, `restart` tools for containers.
+- [x] **Container Lifecycle**: `start`, `stop`, `restart` tools for containers (v0.4.0).
 - [ ] **Docker Compose**: List and manage Docker Compose stacks.
 - [x] **Image Management**: List images and check for updates (v0.3.2).
 - [ ] **Volume Monitoring**: Track volume usage.
