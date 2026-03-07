@@ -294,15 +294,37 @@ export const omvModule: McpModule = {
 
         if (name === "get_container_info") {
             const { name: containerName } = args as { name: string };
-            // Retrieve basic info, stats, and logs using allowed sudo commands
-            const psInfo = await executeOnNas(`sudo docker ps --filter "name=${containerName}" --format "{{.ID}} | {{.Image}} | {{.CreatedAt}} | {{.Status}}"`).catch(() => "Not found");
-            const statsInfo = await executeOnNas(`sudo docker stats --no-stream --format "{{.CPUPerc}} | {{.MemUsage}}" ${containerName}`).catch(() => "Stats unavailable");
-            const logsInfo = await executeOnNas(`sudo docker logs --tail 50 ${containerName}`).catch(() => "Logs unavailable");
+
+            // sudoers restriction: We can't use --filter, so we fetch all and filter in JS
+            const psRaw = await executeOnNas(`sudo docker ps --format "{{.Names}} | {{.ID}} | {{.Image}} | {{.CreatedAt}} | {{.Status}} | {{.Labels}}"`).catch(() => "");
+            const statsRaw = await executeOnNas(`sudo docker stats --no-stream --format "{{.Name}} | {{.CPUPerc}} | {{.MemUsage}}"`).catch(() => "");
+
+            // For logs, sudoers allows --since, so we use that instead of --tail
+            const logsInfo = await executeOnNas(`sudo docker logs --since 1h ${containerName} | tail -n 50`).catch(() => "Logs unavailable (or no logs in the last hour)");
+
+            // Manual filtering
+            const lines = psRaw.split('\n');
+            const psLine = lines.find(l => l.trim().startsWith(`${containerName} |`));
+            const statsLine = statsRaw.split('\n').find(l => l.trim().startsWith(`${containerName} |`));
+
+            if (!psLine) {
+                return { content: [{ type: "text", text: `❌ Container **${containerName}** not found in production.` }] };
+            }
+
+            const psParts = psLine.split('|');
+            const psInfo = psParts.slice(1, 5).join('|').trim();
+            const labelsStr = psParts[5] || "";
+
+            // Extract OMV Compose service name if available
+            const serviceMatch = labelsStr.match(/com\.docker\.compose\.service=([^,]+)/);
+            const serviceName = serviceMatch ? serviceMatch[1] : containerName;
+
+            const statsInfo = statsLine ? statsLine.split('|').slice(1).join('|').trim() : "Stats unavailable";
 
             return {
                 content: [{
                     type: "text",
-                    text: `📦 Detailed Info for: **${containerName}**\n\n**Metadata (ID | Image | Created | Status):**\n\`${psInfo.trim()}\`\n\n**Resource Usage (CPU | RAM):**\n\`${statsInfo.trim()}\`\n\n**Recent Logs (Last 50 lines):**\n\`\`\`\n${logsInfo}\n\`\`\``
+                    text: `📦 Detailed Info for: **${containerName}**\n\n**Metadata (ID | Image | Created | Status):**\n\`${psInfo}\`\n\n**OMV Service Name:** \`${serviceName}\`\n\n**Resource Usage (CPU | RAM):**\n\`${statsInfo}\`\n\n**Recent Logs (Last hour, max 50 lines):**\n\`\`\`\n${logsInfo}\n\`\`\``
                 }]
             };
         }
@@ -324,9 +346,16 @@ export const omvModule: McpModule = {
 
         if (name === "update_container") {
             const { name: containerName } = args as { name: string };
-            // Perform Pull then Up to update
-            const pullParams = JSON.stringify({ name: containerName, command: "pull" });
-            const upParams = JSON.stringify({ name: containerName, command: "up" });
+            // We fetch the service name to ensure we update the specific OMV Compose service/tag
+            const psRaw = await executeOnNas(`sudo docker ps --format "{{.Names}} | {{.Labels}}"`).catch(() => "");
+            const psLine = psRaw.split('\n').find(l => l.trim().startsWith(`${containerName} |`));
+            const labelsStr = psLine ? psLine.split('|')[1] || "" : "";
+            const serviceMatch = labelsStr.match(/com\.docker\.compose\.service=([^,]+)/);
+            const rpcTarget = serviceMatch ? serviceMatch[1] : containerName;
+
+            // Perform Pull then Up to update while respecting the configured tag
+            const pullParams = JSON.stringify({ name: rpcTarget, command: "pull" });
+            const upParams = JSON.stringify({ name: rpcTarget, command: "up" });
 
             const pullCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${pullParams}'`;
             const upCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${upParams}'`;
@@ -337,7 +366,7 @@ export const omvModule: McpModule = {
             return {
                 content: [{
                     type: "text",
-                    text: `🚀 Update sequence (Pull + Up) triggered for container **${containerName}**. This may take a moment to complete in the background.`
+                    text: `🚀 Update sequence (Pull + Up) triggered for service **${rpcTarget}** (container: ${containerName}). OMV will pull the latest version of the specific tag and restart the service.`
                 }]
             };
         }
