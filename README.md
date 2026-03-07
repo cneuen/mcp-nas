@@ -61,10 +61,10 @@ Modify your `%APPDATA%/Claude/claude_desktop_config.json` file:
     "command": "node",
     "args": ["C:/Path/To/mcp-nas/build/index.js"],
     "env": {
-      "NAS_HOST": "192.168.1.27",
-      "NAS_PORT": "8822",
+      "NAS_HOST": "192.168.1.X",
+      "NAS_PORT": "22",
       "NAS_USER": "mcp-agent",
-      "NAS_KEY_PATH": "C:/Users/cneue/.ssh/id_ed25519"
+      "NAS_KEY_PATH": "C:/Users/YOUR_USER/.ssh/id_ed25519"
     }
   }
 }
