@@ -47,12 +47,13 @@ export const omvModule: McpModule = {
 
             const toGB = (bytes: number) => (bytes / (1024 ** 3)).toFixed(2);
             const ramStr = `${toGB(data.memUsed)} GB used / ${toGB(data.memTotal)} GB total (${(data.memUtilization * 100).toFixed(1)}%)`;
+            const updatesStr = data.availablePkgUpdates > 0 ? `${data.availablePkgUpdates} ⚠️` : 'None ✅';
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `System Info for ${data.hostname}:\n- OMV Version: ${data.version}\n- CPU: ${data.cpuModelName} (${data.cpuCores} cores, ${data.cpuUtilization.toFixed(1)}% usage)\n- RAM: ${ramStr}\n- Uptime: ${data.uptime}\n- Load Average: ${loadStr}\n- Reboot Required: ${data.rebootRequired ? 'Yes ⚠️' : 'No'}`,
+                        text: `System Info for ${data.hostname}:\n- OMV Version: ${data.version}\n- CPU: ${data.cpuModelName} (${data.cpuCores} cores, ${data.cpuUtilization.toFixed(1)}% usage)\n- RAM: ${ramStr}\n- Uptime: ${data.uptime}\n- Load Average: ${loadStr}\n- Pending Updates: ${updatesStr}\n- Reboot Required: ${data.rebootRequired ? 'Yes ⚠️' : 'No'}`,
                     },
                 ],
             };
@@ -77,17 +78,31 @@ export const omvModule: McpModule = {
         }
 
         if (name === "check_updates") {
-            const cmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Apt' 'getUpgraded' '{}'`;
-            const result = await executeOnNas(cmd);
-            let data;
-            try { data = JSON.parse(result); } catch (e) { throw new Error(`Parse error: ${result.substring(0, 100)}...`); }
+            // Step 1: Get count via OMV RPC (reliable on OMV 6 & 7)
+            const countCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'System' 'getInformation' '{}'`;
+            const countResult = await executeOnNas(countCmd);
+            let info;
+            try { info = JSON.parse(countResult); } catch (e) { throw new Error(`Parse error: ${countResult.substring(0, 100)}...`); }
 
-            if (!data.data || data.data.length === 0) {
+            const count = info.availablePkgUpdates || 0;
+
+            if (count === 0) {
                 return { content: [{ type: "text", text: "✅ System is fully up to date." }] };
             }
-            const count = data.data.length;
-            const packageNames = data.data.map((p: any) => p.name).slice(0, 15).join(', ');
-            const suffix = count > 15 ? '...' : '';
+
+            // Step 2: Get detailed list via apt (universal fallback)
+            const listCmd = "apt list --upgradable";
+            const listResult = await executeOnNas(listCmd);
+
+            // Clean up apt output (remove WARNING lines and extract package names)
+            const lines = listResult.split('\n')
+                .filter(line => line.includes('/') && !line.startsWith('Listing'))
+                .map(line => line.split('/')[0])
+                .slice(0, 20);
+
+            const packageNames = lines.join(', ');
+            const suffix = lines.length < count ? '...' : '';
+
             return {
                 content: [{ type: "text", text: `⚠️ ${count} updates available.\nPackages: ${packageNames}${suffix}` }]
             };
