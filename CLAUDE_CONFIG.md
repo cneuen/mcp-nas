@@ -15,7 +15,7 @@ Ajoute ceci dans la section `mcpServers` :
     "--rm",
     "-e", "NAS_HOST=192.168.1.27",
     "-e", "NAS_PORT=8822",
-    "-e", "NAS_USER=root",
+    "-e", "NAS_USER=mcp-agent",
     "-v", "C:/Users/cneue/.ssh/id_ed25519:/app/id_ed25519:ro",
     "-e", "NAS_KEY_PATH=/app/id_ed25519",
     "mcp-omv:latest"
