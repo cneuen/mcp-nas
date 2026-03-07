@@ -130,11 +130,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
             const result = await executeOnNas(command);
             const data = JSON.parse(result);
 
+            // Format Load Average if it's an object
+            const loadStr = typeof data.loadAverage === 'object'
+                ? `1min: ${data.loadAverage['1min']}, 5min: ${data.loadAverage['5min']}, 15min: ${data.loadAverage['15min']}`
+                : data.loadAverage;
+
+            // RAM Info usually comes from another RPC, but let's see if it's here or try to get it
+            // For now, let's improve what we have and add a second call if needed.
+            // OMV getInformation has: kernel, hostname, version, cpu, uptime, loadAverage
+
             return {
                 content: [
                     {
                         type: "text",
-                        text: `System Info for ${data.hostname}:\n- Kernel: ${data.kernel}\n- CPU: ${data.cpu}\n- Uptime: ${data.uptime}\n- Load: ${data.loadAverage}`,
+                        text: `System Info for ${data.hostname}:\n- OMV Version: ${data.version}\n- Kernel: ${data.kernel}\n- CPU: ${data.cpu}\n- Uptime: ${data.uptime}\n- Load Average: ${loadStr}`,
                     },
                 ],
             };
