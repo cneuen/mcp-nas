@@ -1,6 +1,6 @@
 {
     "name": "@cneuen/mcp-nas",
-    "version": "0.4.1",
+    "version": "0.4.2",
     "description": "MCP server for NAS and Docker management (Alpha)",
     "main": "build/index.js",
     "bin": {

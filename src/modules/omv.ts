@@ -312,11 +312,14 @@ export const omvModule: McpModule = {
             }
 
             const psParts = psLine.split('|');
-            const psInfo = psParts.slice(1, 5).join('|').trim();
+            const psMetadata = psParts.slice(1, 5).join('|').trim();
             const labelsStr = psParts[5] || "";
 
-            // Extract OMV Compose service name if available
+            // Extract OMV Compose project and service
+            const projectMatch = labelsStr.match(/com\.docker\.compose\.project=([^,]+)/);
             const serviceMatch = labelsStr.match(/com\.docker\.compose\.service=([^,]+)/);
+
+            const projectName = projectMatch ? projectMatch[1] : "Unknown";
             const serviceName = serviceMatch ? serviceMatch[1] : containerName;
 
             const statsInfo = statsLine ? statsLine.split('|').slice(1).join('|').trim() : "Stats unavailable";
@@ -324,15 +327,15 @@ export const omvModule: McpModule = {
             return {
                 content: [{
                     type: "text",
-                    text: `📦 Detailed Info for: **${containerName}**\n\n**Metadata (ID | Image | Created | Status):**\n\`${psInfo}\`\n\n**OMV Service Name:** \`${serviceName}\`\n\n**Resource Usage (CPU | RAM):**\n\`${statsInfo}\`\n\n**Recent Logs (Last hour, max 50 lines):**\n\`\`\`\n${logsInfo}\n\`\`\``
+                    text: `📦 Detailed Info for: **${containerName}**\n\n**Metadata (ID | Image | Created | Status):**\n\`${psMetadata}\`\n\n**OMV Stack (Project):** \`${projectName}\`\n**OMV Service:** \`${serviceName}\`\n\n**Resource Usage (CPU | RAM):**\n\`${statsInfo}\`\n\n**Recent Logs (Last hour, max 50 lines):**\n\`\`\`\n${logsInfo}\n\`\`\``
                 }]
             };
         }
 
         if (name === "manage_container") {
             const { name: containerName, action } = args as { name: string; action: string };
-            // OMV Compose doContainerCommand: action can be start, stop, restart
-            const rpcParams = JSON.stringify({ name: containerName, command: action });
+            // Robust JSON quoting for RPC: escape double quotes for shell safety
+            const rpcParams = JSON.stringify({ name: containerName, command: action }).replace(/"/g, '\\"');
             const cmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${rpcParams}'`;
 
             await executeOnNas(cmd);
@@ -346,19 +349,30 @@ export const omvModule: McpModule = {
 
         if (name === "update_container") {
             const { name: containerName } = args as { name: string };
-            // We fetch the service name to ensure we update the specific OMV Compose service/tag
+
+            // 1. Identify the PROJECT (stack) name for this container
             const psRaw = await executeOnNas(`sudo docker ps --format "{{.Names}} | {{.Labels}}"`).catch(() => "");
             const psLine = psRaw.split('\n').find(l => l.trim().startsWith(`${containerName} |`));
-            const labelsStr = psLine ? psLine.split('|')[1] || "" : "";
-            const serviceMatch = labelsStr.match(/com\.docker\.compose\.service=([^,]+)/);
-            const rpcTarget = serviceMatch ? serviceMatch[1] : containerName;
 
-            // Perform Pull then Up to update while respecting the configured tag
-            const pullParams = JSON.stringify({ name: rpcTarget, command: "pull" });
-            const upParams = JSON.stringify({ name: rpcTarget, command: "up" });
+            if (!psLine) {
+                return { content: [{ type: "text", text: `❌ Could not find container **${containerName}** to identify its stack.` }] };
+            }
 
-            const pullCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${pullParams}'`;
-            const upCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doContainerCommand' '${upParams}'`;
+            const labelsStr = psLine.split('|')[1] || "";
+            const projectMatch = labelsStr.match(/com\.docker\.compose\.project=([^,]+)/);
+
+            if (!projectMatch) {
+                return { content: [{ type: "text", text: `❌ Container **${containerName}** is not managed by OMV Compose (no project label).` }] };
+            }
+
+            const projectName = projectMatch[1];
+
+            // 2. Perform Pull then Up on the PROJECT stack to respect original tags
+            const pullParams = JSON.stringify({ name: projectName, command: "pull" }).replace(/"/g, '\\"');
+            const upParams = JSON.stringify({ name: projectName, command: "up" }).replace(/"/g, '\\"');
+
+            const pullCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doCommand' '${pullParams}'`;
+            const upCmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Compose' 'doCommand' '${upParams}'`;
 
             await executeOnNas(pullCmd);
             await executeOnNas(upCmd);
@@ -366,7 +380,7 @@ export const omvModule: McpModule = {
             return {
                 content: [{
                     type: "text",
-                    text: `🚀 Update sequence (Pull + Up) triggered for service **${rpcTarget}** (container: ${containerName}). OMV will pull the latest version of the specific tag and restart the service.`
+                    text: `🚀 Update sequence (Pull + Up) triggered for stack **${projectName}** (containing ${containerName}). OMV will pull the latest version of the configured tag and restart the service.`
                 }]
             };
         }
