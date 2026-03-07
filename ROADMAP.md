@@ -4,13 +4,17 @@ This document outlines the planned features, improvements, and future directions
 
 ## 🚀 Upcoming Features
 
-### 🐳 Enhanced Docker Controls
-- [x] v0.4.0 : Container Lifecycle (Stats, Logs, Start, Stop, Restart)
-- [x] v0.4.1 : Detailed Info Fix (sudo compliant)
-- [x] v0.4.3 : Docker Update Fix (Stack targeting, UUID-aware, OMV 7 RPC compliant)
-- [ ] **Docker Compose**: List and manage Docker Compose stacks.
-- [x] **Image Management**: List images and check for updates (v0.3.2).
-- [ ] **Volume Monitoring**: Track volume usage.
+### 🐳 Container Management Architecture
+**Two dedicated modules for full coverage:**
+1. **OMV Compose Module (`omv`)**: Manages stacks created via the OMV UI (uses OMV RPC, UUIDs, stack-aware `pull`/`up`).
+    - [x] v0.4.0 : Container Lifecycle (Stats, Logs, Start, Stop, Restart)
+    - [x] v0.4.1 : Detailed Info Fix (sudo compliant)
+    - [x] v0.4.3 : Docker Update Fix (Stack targeting, UUID-aware, OMV 7 RPC compliant)
+2. **Raw Docker Module (`docker`)**: Manages native containers created via Portainer/CLI.
+    - [x] **Image Management**: List images and check for updates (v0.3.2).
+    - [ ] **Docker Compose**: List and manage native Docker Compose stacks.
+    - [ ] **Raw Container Update**: Pull & Restart for non-OMV containers (requires enhanced `sudoers` privileges).
+    - [ ] **Volume Monitoring**: Track volume usage.
 
 ### 📊 Advanced System Monitoring & Hardware
 - [x] **RAID Monitoring**: Status of RAID arrays (via `mdadm` or OMV API).

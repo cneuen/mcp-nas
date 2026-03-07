@@ -29,9 +29,9 @@ This project is designed to guarantee maximum security in a homelab environment:
 - **Storage**: Detailed disk status, used/total space, SMART status.
 - **Maintenance**: Instant checks for pending system updates.
 
-### 🐳 Docker Management
-- **Monitoring**: Container list, status, and CPU/RAM performance.
-- **Smart Logs**: Targeted log retrieval or aggregated reports across all containers.
+### 🐳 Dual-Module Docker Management
+- **OMV Compose Module**: Deep integration with OMV 7 RPC to manage stacks (Projects) natively created in the OMV UI, supporting UUID-aware updates (`pull` + `up -d`) and lifecycle controls.
+- **Raw Docker Module**: Management for containers created externally (e.g., via Portainer or CLI). Currently supports detailed monitoring (Logs, Stats, Config) with upcoming support for raw docker-compose updates.
 
 ### 🛡️ Network & Security
 - **CrowdSec**: Detection and listing of active bans, including reasons and origins.
