@@ -114,6 +114,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     properties: {},
                 },
             },
+            {
+                name: "get_docker_stats",
+                description: "Get detailed CPU/RAM usage for each Docker container",
+                inputSchema: {
+                    type: "object",
+                    properties: {},
+                },
+            },
         ],
     };
 });
@@ -123,40 +131,58 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
  */
 server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name: string, arguments?: any } }) => {
     const { name } = request.params;
+    const WRAPPER = "sudo /usr/local/bin/mcp-omv-wrapper";
 
     try {
         if (name === "get_system_stats") {
-            const command = `omv-rpc -u admin 'System' 'getInformation' '{}'`;
-            const result = await executeOnNas(command);
+            const result = await executeOnNas(`${WRAPPER} get-system-stats`);
             const data = JSON.parse(result);
 
-            // Format Load Average if it's an object
+            // Format Load Average
             const loadStr = typeof data.loadAverage === 'object'
                 ? `1min: ${data.loadAverage['1min']}, 5min: ${data.loadAverage['5min']}, 15min: ${data.loadAverage['15min']}`
                 : data.loadAverage;
 
-            // RAM Info usually comes from another RPC, but let's see if it's here or try to get it
-            // For now, let's improve what we have and add a second call if needed.
-            // OMV getInformation has: kernel, hostname, version, cpu, uptime, loadAverage
+            // RAM Calculations (convert bytes to GB)
+            const toGB = (bytes: number) => (bytes / (1024 ** 3)).toFixed(2);
+            const ramStr = `${toGB(data.memUsed)} GB used / ${toGB(data.memTotal)} GB total (${(data.memUtilization * 100).toFixed(1)}%)`;
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `System Info for ${data.hostname}:\n- OMV Version: ${data.version}\n- Kernel: ${data.kernel}\n- CPU: ${data.cpu}\n- Uptime: ${data.uptime}\n- Load Average: ${loadStr}`,
+                        text: `System Info for ${data.hostname}:\n- OMV Version: ${data.version}\n- CPU: ${data.cpuModelName} (${data.cpuCores} cores, ${data.cpuUtilization.toFixed(1)}% usage)\n- RAM: ${ramStr}\n- Uptime: ${data.uptime}\n- Load Average: ${loadStr}\n- Reboot Required: ${data.rebootRequired ? 'Yes ⚠️' : 'No'}`,
                     },
                 ],
             };
         }
 
         if (name === "list_containers") {
-            const command = `docker ps --format "{{.Names}} ({{.Status}})"`;
-            const result = await executeOnNas(command);
+            const result = await executeOnNas(`${WRAPPER} list-containers`);
             return {
                 content: [
                     {
                         type: "text",
                         text: result || "No containers running.",
+                    },
+                ],
+            };
+        }
+
+        if (name === "get_docker_stats") {
+            const result = await executeOnNas(`${WRAPPER} get-docker-stats`);
+            // Format: Name:CPUPerc:MemPerc (one per line)
+            const lines = result.trim().split('\n');
+            const formatted = lines.map(line => {
+                const [n, c, m] = line.split(':');
+                return `- **${n}**: CPU: ${c}%, RAM: ${m}%`;
+            }).join('\n');
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Docker Container Stats:\n${formatted || "No stats available."}`,
                     },
                 ],
             };
