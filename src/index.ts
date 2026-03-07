@@ -4,19 +4,25 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
+    Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { Client, ConnectConfig } from "ssh2";
 import * as fs from "fs";
 
+import { McpModule } from "./modules/types.js";
+import { omvModule } from "./modules/omv.js";
+import { dockerModule } from "./modules/docker.js";
+import { crowdsecModule } from "./modules/crowdsec.js";
+
 /**
- * MCP-OMV Server
- * Standardized management for OpenMediaVault and Docker
+ * MCP-NAS Server
+ * Standardized management for Homelab Servers
  */
 const server = new Server(
     {
-        name: "mcp-omv",
-        version: "0.1.0",
+        name: "mcp-nas",
+        version: "0.2.0",
     },
     {
         capabilities: {
@@ -28,10 +34,15 @@ const server = new Server(
 /**
  * Configuration from environment
  */
-const NAS_HOST = process.env.NAS_HOST || "192.168.1.27";
-const NAS_PORT = parseInt(process.env.NAS_PORT || "8822");
-const NAS_USER = process.env.NAS_USER || "root";
+const NAS_HOST = process.env.NAS_HOST;
+const NAS_PORT = parseInt(process.env.NAS_PORT || "22");
+const NAS_USER = process.env.NAS_USER;
 const NAS_KEY_PATH = process.env.NAS_KEY_PATH; // Optional
+
+if (!NAS_HOST || !NAS_USER) {
+    console.error("Missing mandatory environment variables: NAS_HOST and NAS_USER must be set.");
+    process.exit(1);
+}
 
 /**
  * Execute a command on the NAS via SSH
@@ -51,9 +62,10 @@ async function executeOnNas(command: string): Promise<string> {
                 stream.on("close", (code: number) => {
                     conn.end();
                     if (code !== 0) {
-                        reject(new Error(`Exit code ${code}: ${errorOutput}`));
+                        reject(new Error(`Exit code ${code}: ${errorOutput || output}`));
                     } else {
-                        resolve(output);
+                        const finalOut = (output + (errorOutput ? "\n" + errorOutput : "")).trim();
+                        resolve(finalOut);
                     }
                 }).on("data", (data: Buffer) => {
                     output += data.toString();
@@ -94,37 +106,29 @@ async function executeOnNas(command: string): Promise<string> {
 }
 
 /**
- * List available tools
+ * Available modules
+ */
+const allModules: McpModule[] = [omvModule, dockerModule, crowdsecModule];
+
+/**
+ * List available tools by aggregating across supported modules
  */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-        tools: [
-            {
-                name: "get_system_stats",
-                description: "Get general OMV system stats (CPU, RAM, Uptime)",
-                inputSchema: {
-                    type: "object",
-                    properties: {},
-                },
-            },
-            {
-                name: "list_containers",
-                description: "List all Docker containers on the NAS",
-                inputSchema: {
-                    type: "object",
-                    properties: {},
-                },
-            },
-            {
-                name: "get_docker_stats",
-                description: "Get detailed CPU/RAM usage for each Docker container",
-                inputSchema: {
-                    type: "object",
-                    properties: {},
-                },
-            },
-        ],
-    };
+    const tools: Tool[] = [];
+
+    // Check support for all modules in parallel
+    await Promise.all(allModules.map(async (mod) => {
+        try {
+            const isSupported = await mod.isSupported(executeOnNas);
+            if (isSupported) {
+                tools.push(...mod.getTools());
+            }
+        } catch (err) {
+            console.error(`Error checking support for module ${mod.name}:`, err);
+        }
+    }));
+
+    return { tools };
 });
 
 /**
@@ -132,64 +136,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
  */
 server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name: string, arguments?: any } }) => {
     const { name } = request.params;
-    const WRAPPER = "sudo /usr/local/bin/mcp-omv-wrapper";
-
     try {
-        if (name === "get_system_stats") {
-            const result = await executeOnNas(`${WRAPPER} get-system-stats`);
-            const data = JSON.parse(result);
-
-            // Format Load Average
-            const loadStr = typeof data.loadAverage === 'object'
-                ? `1min: ${data.loadAverage['1min']}, 5min: ${data.loadAverage['5min']}, 15min: ${data.loadAverage['15min']}`
-                : data.loadAverage;
-
-            // RAM Calculations (convert bytes to GB)
-            const toGB = (bytes: number) => (bytes / (1024 ** 3)).toFixed(2);
-            const ramStr = `${toGB(data.memUsed)} GB used / ${toGB(data.memTotal)} GB total (${(data.memUtilization * 100).toFixed(1)}%)`;
-
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `System Info for ${data.hostname}:\n- OMV Version: ${data.version}\n- CPU: ${data.cpuModelName} (${data.cpuCores} cores, ${data.cpuUtilization.toFixed(1)}% usage)\n- RAM: ${ramStr}\n- Uptime: ${data.uptime}\n- Load Average: ${loadStr}\n- Reboot Required: ${data.rebootRequired ? 'Yes ⚠️' : 'No'}`,
-                    },
-                ],
-            };
+        // Find the module that can handle this tool
+        for (const mod of allModules) {
+            const result = await mod.handleCall(name, request.params.arguments, executeOnNas);
+            if (result) {
+                return result;
+            }
         }
 
-        if (name === "list_containers") {
-            const result = await executeOnNas(`${WRAPPER} list-containers`);
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: result || "No containers running.",
-                    },
-                ],
-            };
-        }
-
-        if (name === "get_docker_stats") {
-            const result = await executeOnNas(`${WRAPPER} get-docker-stats`);
-            // Format: Name:CPUPerc:MemPerc (one per line)
-            const lines = result.trim().split('\n');
-            const formatted = lines.map(line => {
-                const [n, c, m] = line.split(':');
-                return `- **${n}**: CPU: ${c}%, RAM: ${m}%`;
-            }).join('\n');
-
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Docker Container Stats:\n${formatted || "No stats available."}`,
-                    },
-                ],
-            };
-        }
-
-        throw new Error(`Unknown tool: ${name}`);
+        throw new Error(`Unknown tool: ${name}. Ensure the required module is supported on your system.`);
     } catch (error) {
         return {
             content: [
@@ -209,7 +165,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("MCP-OMV Server running on stdio");
+    console.error("MCP-NAS Server running on stdio");
 }
 
 main().catch((error) => {

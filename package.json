@@ -1,12 +1,23 @@
 {
-    "name": "mcp-omv",
-    "version": "0.1.0",
-    "description": "MCP server for OpenMediaVault and Docker management",
+    "name": "@cneuen/mcp-nas",
+    "version": "0.2.0",
+    "description": "MCP server for NAS and Docker management (Alpha)",
     "main": "build/index.js",
     "bin": {
-        "mcp-omv": "./build/index.js"
+        "mcp-nas": "./build/index.js"
     },
     "type": "module",
+    "author": "cneuen",
+    "license": "MIT",
+    "keywords": [
+        "mcp",
+        "mcp-server",
+        "nas"
+    ],
+    "files": [
+        "build",
+        "README.md"
+    ],
     "scripts": {
         "build": "tsc",
         "start": "node build/index.js",
