@@ -7,7 +7,7 @@
 **Control your Homelab via an AI Assistant with Maximalist Security**
 
 [![MCP-NAS](https://img.shields.io/badge/MCP-Protocol-blue.svg)](https://modelcontextprotocol.io)
-[![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-Beta-blue.svg)]()
 
 The `mcp-nas` agent is an experimental Model Context Protocol (MCP) server. It enables any compatible LLM assistant to interact natively with a Linux/NAS system via SSH for real-time monitoring, Docker management, and security intelligence.
 
@@ -63,13 +63,12 @@ Modify your MCP client configuration (e.g. `claude_desktop_config.json`, Cline, 
 ```json
 "mcpServers": {
   "mcp-nas": {
-    "command": "node",
-    "args": ["C:/Path/To/mcp-nas/build/index.js"],
-    "env": {
-      "NAS_HOST": "192.168.1.X",
-      "NAS_USER": "mcp-agent",
-      "NAS_KEY_PATH": "C:/Users/USER/.ssh/id_ed25519"
-    }
+  "command": "npx",
+  "args": ["-y", "@cneuen/mcp-nas@latest"],
+  "env": {
+    "NAS_HOST": "192.168.1.X",
+    "NAS_USER": "mcp-agent",
+    "NAS_KEY_PATH": "C:/Users/USER/.ssh/id_ed25519"
   }
 }
 ```
@@ -77,10 +76,10 @@ Modify your MCP client configuration (e.g. `claude_desktop_config.json`, Cline, 
 ---
 
 ## 🧭 How to interact with your NAS?
-- *"Donne-moi un rapport de santé de mon NAS."*
-- *"Quelles sont les routes actives sur Traefik ?"*
-- *"Est-ce que CrowdSec a banni des IPs récemment ?"*
-- *"Mets à jour le stack 'emby'."*
+- *"Give me a health report of my NAS."*
+- *"What are the active routes on Traefik?"*
+- *"Has CrowdSec banned any IPs recently?"*
+- *"Update the 'emby' stack."*
 
 ---
 *Made with ❤️ for Homelab enthusiasts.*
