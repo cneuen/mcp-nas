@@ -52,7 +52,7 @@ This document outlines the planned features, improvements, and future directions
 
 ## 🛠️ Internal Improvements
 - [ ] **Unit Tests**: Add test coverage for modules.
-- [ ] **Multi-System Support**: Official support beyond OMV (Generic Debian/Ubuntu).
+- [ ] **Multi-System Support**: Official support for RedHat/Arch-based distros (V1.0 currently tested on Debian/OMV only).
 - [ ] **Better Error Parsing**: More descriptive errors for failed SSH/RPC calls.
 
 ---
