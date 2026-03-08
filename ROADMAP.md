@@ -1,36 +1,53 @@
 # 🗺️ MCP-NAS Roadmap
 
-This document outlines the planned features, improvements, and future directions for the MCP-NAS project.
+This document outlines the planned features, improvements, and future directions for the MCP-NAS project, categorized by their integration level.
 
-## 🚀 Upcoming Features
+## 🐧 Core Linux Features (Native)
+*Universal tools available on any standard Linux/NAS distribution.*
 
-### 🐳 Container Management Architecture
-**Two dedicated modules for full coverage:**
-1. **OMV Compose Module (`omv`)**: Manages stacks created via the OMV UI (uses OMV RPC, UUIDs, stack-aware `pull`/`up`).
-    - [x] v0.4.0 : Container Lifecycle (Stats, Logs, Start, Stop, Restart)
-    - [x] v0.4.1 : Detailed Info Fix (sudo compliant)
-    - [x] v0.4.3 : Docker Update Fix (Stack targeting, UUID-aware, OMV 7 RPC compliant)
-2. **Raw Docker Module (`docker`)**: Manages native containers created via Portainer/CLI.
-    - [x] **Image Management**: List images and check for updates (v0.3.2).
-    - [ ] **Docker Compose**: List and manage native Docker Compose stacks.
-    - [ ] **Raw Container Update**: Pull & Restart for non-OMV containers (requires enhanced `sudoers` privileges).
-    - [ ] **Volume Monitoring**: Track volume usage.
-
-### 📊 Advanced System Monitoring & Hardware
-- [x] **RAID Monitoring**: Status of RAID arrays (via `mdadm` or OMV API).
-- [x] **Detailed HDD Info**: Disk models, serial numbers, and wear levels.
+### 📊 System & Hardware Monitoring
 - [x] **Temperature Sensors**: Monitor CPU and HDD temperatures (via `smartctl`).
 - [x] **Process Manager**: List top processes by CPU/RAM.
-- [ ] **Network Traffic**: Real-time bandwidth monitoring.
+- [x] **Network Traffic**: Real-time bandwidth monitoring and interface status (v0.7.0).
 - [ ] **GPU Status**: Support for NVIDIA/Intel GPU monitoring if available.
 
-### 🛡️ Security & Access
-- [ ] **Fail2Ban**: Support for listing and managing Fail2Ban jails.
-- [ ] **SSH Logs**: Tools to audit failed SSH login attempts.
-- [ ] **VPN Monitoring**: Check Wireguard/Tailscale/OpenVPN status.
+### 🏗️ Global Storage & RAID (`storage`)
+- [x] **Universal RAID Status**: Monitor software RAID (/proc/mdstat) without OMV dependency (v0.8.0).
+- [x] **Storage Usage**: Detailed filesystem usage (df -h) (v0.8.0).
+- [x] **Disk Health (SMART)**: Monitor physical disk health and detailed attributes (v0.8.0).
+- [ ] **Volume Monitoring**: Track LVM or Docker volume usage.
 
-### ⚙️ Automation & Configuration
-- [ ] **NAS Health Alerts**: Configurable thresholds for storage/CPU.
+### � Logging & Auditing
+- [x] **System Logs**: Support for listing and reading files in `/var/log` (v0.5.0).
+- [x] **Systemd Journal**: Integration with `journalctl` for real-time service logs (v0.5.0).
+- [x] **SSH Audit**: Tools to audit failed SSH login attempts (v0.5.0).
+
+---
+
+## 🧩 Integrations & External Solutions
+*Modules that activate automatically when specific services are detected.*
+
+### 🐳 Docker & Containers
+- **OMV Compose Module (`omv`)**: Deep integration for stacks created via OMV UI.
+    - [x] v0.4.0 : Lifecycle (Stats, Logs, Start, Stop, Restart)
+    - [x] v0.4.3 : UUID-aware Updates (Pull + Up -d)
+- **Raw Docker Module (`docker`)**: Management for native containers (Portainer/CLI).
+    - [x] **Image Management**: Check for updates (v0.3.2).
+    - [x] **Compose Support**: List and manage native stacks (v0.6.0).
+    - [x] **Updates**: Pull & Recreate for native stacks (v0.6.0).
+- **Traefik Module (`traefik`)**: Automated discovery for reverse-proxy routing.
+    - [x] **Routing Discovery**: Map active routes via Docker labels (v0.9.0).
+    - [x] **Health & Logs**: Container status and error monitoring (v0.9.0).
+
+### 🛡️ Security Integrations
+- [x] **CrowdSec**: Detection and listing of active bans (v0.2.0).
+- [x] **Fail2Ban**: Support for listing and managing Fail2Ban jails (v1.0.0-beta).
+- [x] **VPN Monitoring**: Check Wireguard/Tailscale/OpenVPN status (v0.7.0).
+
+---
+
+## ⚙️ Automation & Configuration
+- [x] **NAS Health Summary**: Aggregated dashboard tool (v1.0.0-beta).
 - [ ] **Scheduled Reports**: Automated NAS health summaries.
 
 ## 🛠️ Internal Improvements

@@ -39,6 +39,35 @@ export const dockerModule: McpModule = {
                     },
                 },
             },
+            {
+                name: "manage_native_container",
+                description: "Start, Stop, or Restart a native Docker container",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string", description: "Container name" },
+                        action: { type: "string", enum: ["start", "stop", "restart"], description: "Action to perform" }
+                    },
+                    required: ["name", "action"]
+                },
+            },
+            {
+                name: "list_native_stacks",
+                description: "List all native Docker Compose stacks",
+                inputSchema: { type: "object", properties: {} },
+            },
+            {
+                name: "update_native_stack",
+                description: "Pull latest images and restart all services in a native Docker Compose stack",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        projectName: { type: "string", description: "Name of the compose project/stack" },
+                        workingDir: { type: "string", description: "Full path to the directory containing docker-compose.yml" }
+                    },
+                    required: ["projectName", "workingDir"]
+                },
+            },
         ];
     },
     async handleCall(name, args, executeOnNas) {
@@ -96,6 +125,51 @@ export const dockerModule: McpModule = {
                 return { content: [{ type: "text", text: aggregatedLogs }] };
             }
         }
+
+        if (name === "manage_native_container") {
+            const { name: containerName, action } = args as { name: string; action: string };
+            const cmd = `${cmdPrefix}/usr/bin/docker ${action} ${containerName}`;
+            await executeOnNas(cmd);
+            return {
+                content: [{ type: "text", text: `✅ Container **${containerName}** successfully ${action}ed.` }]
+            };
+        }
+
+        if (name === "list_native_stacks") {
+            const cmd = `${cmdPrefix}/usr/bin/docker compose ls --format json`;
+            const result = await executeOnNas(cmd).catch(() => "[]");
+            let stacks = [];
+            try { stacks = JSON.parse(result); } catch (e) { /* fallback to raw if json fails */ }
+
+            if (!Array.isArray(stacks) || stacks.length === 0) {
+                // Try raw format if json is not supported or empty
+                const rawResult = await executeOnNas(`${cmdPrefix}/usr/bin/docker compose ls`);
+                return { content: [{ type: "text", text: `Native Stacks:\n\`\`\`\n${rawResult || "No stacks found."}\n\`\`\`` }] };
+            }
+
+            const formatted = stacks.map((s: any) => `- **${s.Name}**: Status: ${s.Status} | Config: ${s.ConfigFiles}`).join('\n');
+            return { content: [{ type: "text", text: `Native Stacks:\n${formatted}` }] };
+        }
+
+        if (name === "update_native_stack") {
+            const { projectName, workingDir } = args as { projectName: string; workingDir: string };
+
+            // Security check: simple path validation (could be more robust)
+            if (!workingDir.startsWith("/")) {
+                throw new Error("Invalid working directory path. Must be absolute.");
+            }
+
+            const pullCmd = `cd ${workingDir} && ${cmdPrefix}/usr/bin/docker compose pull`;
+            const upCmd = `cd ${workingDir} && ${cmdPrefix}/usr/bin/docker compose up -d`;
+
+            await executeOnNas(pullCmd);
+            await executeOnNas(upCmd);
+
+            return {
+                content: [{ type: "text", text: `🚀 Stack **${projectName}** updated successfully (Pull + Up -d in ${workingDir}).` }]
+            };
+        }
+
         return null; // Not meant for this module
     }
 };

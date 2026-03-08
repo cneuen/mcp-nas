@@ -4,57 +4,62 @@
   <img src="./docs/assets/logo.png" alt="MCP-NAS Logo" width="200"/>
 </div>
 
-**Control your Homelab via Claude Desktop with Maximalist Security**
+**Control your Homelab via an AI Assistant with Maximalist Security**
 
 [![MCP-NAS](https://img.shields.io/badge/MCP-Protocol-blue.svg)](https://modelcontextprotocol.io)
 [![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)]()
 
-The `mcp-nas` agent is an experimental Model Context Protocol (MCP) server. It enables Claude to interact natively with a Linux/NAS system via SSH for real-time monitoring, Docker management, and security intelligence.
+The `mcp-nas` agent is an experimental Model Context Protocol (MCP) server. It enables any compatible LLM assistant to interact natively with a Linux/NAS system via SSH for real-time monitoring, Docker management, and security intelligence.
 
 ---
 
 ## ✨ Philosophy & "Zero-Trust" Security
-This project is designed to guarantee maximum security in a homelab environment:
-- **Agentless Architecture**: No complex installations on the NAS; communication relies on **standard SSH**.
-- **Least Privilege**: Utilizes a restricted user (`mcp-agent`) with `sudo` rights strictly limited by a whitelist.
-- **Strong Authentication**: Asymmetric keys (ED25519) exclusively.
-- **Isolation**: Sensitive data is passed through the local environment; nothing is hardcoded.
+- **Agentless**: Standard SSH communication.
+- **Least Privilege**: Restricted `mcp-agent` user with specific `sudo` whitelist.
+- **Strong Auth**: Asymmetric keys (ED25519) only.
+- **Hardened Key Usage**: The setup script automatically locks the SSH key (`no-pty`, `no-port-forwarding`) to prevent interactive shell access or tunneling.
+- **Audit Logging**: A self-deploying SSH Wrapper intercepts and logs every command executed by the AI agent to the NAS syslog (`/var/log/syslog` or `auth.log`).
+- **Data Isolation**: No hardcoded credentials.
+
+> ⚠️ **IMPORTANT SECURITY WARNINGS (Please Read)**
+> - **Highly Privileged Agent**: While restricted, the `mcp-agent` has control over Docker. E.g., via `docker compose`, an attacker could mount the host filesystem. **Treat the machine running the MCP client as a Highly Privileged Environment.** If your local workstation is compromised, your NAS is at risk.
+> - **No Direct Internet Exposure**: **Never** expose your NAS SSH port (22) directly to the internet. Always use a local network or a secure VPN (Wireguard/Tailscale).
+> - **Data Privacy**: Using this MCP server means your system logs (e.g., `/var/log`, `journalctl`) are sent to Anthropic's cloud for AI analysis. Ensure no highly sensitive passwords or API keys are written in plaintext to your logs.
 
 ---
 
-## 🚀 Features
+## 🚀 Modular Features
 
-### 📊 System & Hardware Monitoring
-- **Real-Time Stats**: CPU, RAM, Uptime, Load (via OMV API or system commands).
-- **Storage**: Detailed disk status, used/total space, SMART status.
-- **Maintenance**: Instant checks for pending system updates.
+The agent is organized into **Core** modules (universal) and **Integration** modules (solution-specific).
 
-### 🐳 Dual-Module Docker Management
-- **OMV Compose Module**: Deep integration with OMV 7 RPC to manage stacks (Projects) natively created in the OMV UI, supporting UUID-aware updates (`pull` + `up -d`) and lifecycle controls.
-- **Raw Docker Module**: Management for containers created externally (e.g., via Portainer or CLI). Currently supports detailed monitoring (Logs, Stats, Config) with upcoming support for raw docker-compose updates.
+### 🐧 Core Linux Features
+*Works natively on any standard Linux NAS (Debian, Ubuntu, etc.)*
+- **📊 Monitoring**: CPU, RAM, Uptime, Temperatures (CPU/HDD), and real-time Network Traffic.
+- **🗄️ Storage**: Universal RAID status (`mdstat`), filesystem usage, and SMART disk health.
+- **📜 Logs**: Remote access to `/var/log`, `journalctl`, and SSH login audits.
 
-### 🛡️ Network & Security
-- **CrowdSec**: Detection and listing of active bans, including reasons and origins.
+### 🧩 Integrations & Solutions
+*Smart modules that activate when the service is detected.*
+- **🐶 OpenMediaVault**: Deep integration with OMV RPC for stack management and updates.
+- **🐳 Docker & Compose**: Management for native containers and standalone compose stacks.
+- **🚦 Traefik**: Automated discovery of reverse-proxy routes and backend health via labels.
+- **🛡️ Security**: CrowdSec ban monitoring, VPN status (Wireguard/Tailscale), and SSH auditing.
 
 ---
 
 ## 🛠️ Installation & Configuration
 
 ### 1. NAS Preparation
-Run the setup script on your NAS (as root) to create the secure environment:
+Run the setup script securely on your NAS (as root) directly from the repository:
 ```bash
-# On the NAS
+# Download and execute the setup script
+curl -fsSL https://raw.githubusercontent.com/cneuen/mcp-nas/main/setup-mcp-nas.sh -o setup-mcp-nas.sh
 chmod +x setup-mcp-nas.sh
 sudo ./setup-mcp-nas.sh "mcp-agent" "YOUR_SSH_PUBLIC_KEY"
 ```
 
-### 2. Local Agent Compilation
-The agent runs natively via Node.js on your host machine.
-1. Install dependencies: `npm install`
-2. Build the project: `npm run build`
-
-### 3. Claude Desktop Configuration
-Modify your `%APPDATA%/Claude/claude_desktop_config.json` file:
+### 2. MCP Client Configuration
+Modify your MCP client configuration (e.g. `claude_desktop_config.json`, Cline, etc.):
 ```json
 "mcpServers": {
   "mcp-nas": {
@@ -62,25 +67,20 @@ Modify your `%APPDATA%/Claude/claude_desktop_config.json` file:
     "args": ["C:/Path/To/mcp-nas/build/index.js"],
     "env": {
       "NAS_HOST": "192.168.1.X",
-      "NAS_PORT": "22",
       "NAS_USER": "mcp-agent",
-      "NAS_KEY_PATH": "C:/Users/YOUR_USER/.ssh/id_ed25519"
+      "NAS_KEY_PATH": "C:/Users/USER/.ssh/id_ed25519"
     }
   }
 }
 ```
-*(If installed globally via npm, the command can be `"npx", "args": ["-y", "@cneuen/mcp-nas"]`)*
 
 ---
 
 ## 🧭 How to interact with your NAS?
-
-Once configured, simply ask Claude:
-- *"Give me a health report of my NAS."*
-- *"Is there enough space left on my drives?"*
-- *"List the containers running on the NAS."*
-- *"Have any IPs been banned recently by CrowdSec?"*
-- *"Do I need to update my system?"*
+- *"Donne-moi un rapport de santé de mon NAS."*
+- *"Quelles sont les routes actives sur Traefik ?"*
+- *"Est-ce que CrowdSec a banni des IPs récemment ?"*
+- *"Mets à jour le stack 'emby'."*
 
 ---
 *Made with ❤️ for Homelab enthusiasts.*

@@ -18,34 +18,8 @@ export const omvModule: McpModule = {
                 inputSchema: { type: "object", properties: {} },
             },
             {
-                name: "get_storage_stats",
-                description: "Get filesystem storage stats (Free/Used space) from OMV",
-                inputSchema: { type: "object", properties: {} },
-            },
-            {
                 name: "check_updates",
                 description: "Check for pending APT/OMV system updates",
-                inputSchema: { type: "object", properties: {} },
-            },
-            {
-                name: "get_disk_health",
-                description: "List all physical disks and their S.M.A.R.T. health status",
-                inputSchema: { type: "object", properties: {} },
-            },
-            {
-                name: "get_disk_details",
-                description: "Get detailed S.M.A.R.T. attributes and temperature for a specific disk",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        device: { type: "string", description: "Device path (e.g., /dev/sda)" }
-                    },
-                    required: ["device"]
-                },
-            },
-            {
-                name: "get_raid_status",
-                description: "Get the status of software RAID (mdadm) arrays",
                 inputSchema: { type: "object", properties: {} },
             },
             {
@@ -129,23 +103,6 @@ export const omvModule: McpModule = {
             };
         }
 
-        if (name === "get_storage_stats") {
-            const cmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'FileSystemMgmt' 'getList' '{"start":0,"limit":100}'`;
-            const result = await executeOnNas(cmd);
-            let data;
-            try { data = JSON.parse(result); } catch (e) { throw new Error(`Parse error: ${result.substring(0, 100)}...`); }
-
-            if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
-                return { content: [{ type: "text", text: "No storage devices found." }] };
-            }
-
-            const formatted = data.data.map((fs: any) => {
-                const status = fs.status === 1 ? 'Online ✅' : 'Offline ❌';
-                return `- **${fs.mountpoint || 'Unknown'}** (${fs.devicefile}): ${fs.percentage}% used (${fs.used} / ${fs.size}). Status: ${status}`;
-            }).join('\n');
-
-            return { content: [{ type: "text", text: `Storage Status:\n${formatted || "No filesystems."}` }] };
-        }
 
         if (name === "check_updates") {
             // Step 1: Get count via OMV RPC (reliable on OMV 6 & 7)
@@ -178,70 +135,6 @@ export const omvModule: McpModule = {
             };
         }
 
-        if (name === "get_disk_health") {
-            const cmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Smart' 'enumerateDevices' '{}'`;
-            const result = await executeOnNas(cmd);
-            let data;
-            try { data = JSON.parse(result); } catch (e) { throw new Error(`Parse error: ${result.substring(0, 100)}...`); }
-
-            if (!Array.isArray(data) || data.length === 0) {
-                return { content: [{ type: "text", text: "No SMART-capable disks found." }] };
-            }
-
-            const formatted = data.map((d: any) => {
-                const status = d.overallstatus === "GOOD" ? "✅ Healthy" : `⚠️ ${d.overallstatus}`;
-                return `- **${d.devicename}**: ${d.vendor || ''} ${d.description} (S/N: ${d.serialnumber}). Status: ${status}`;
-            }).join('\n');
-
-            return { content: [{ type: "text", text: `Physical Disks Health:\n${formatted}` }] };
-        }
-
-        if (name === "get_disk_details") {
-            const { device } = args as { device: string };
-            const cmd = `${cmdPrefix}/usr/sbin/omv-rpc -u admin 'Smart' 'getAttributes' '{"devicefile":"${device}"}'`;
-            const result = await executeOnNas(cmd);
-            let data;
-            try { data = JSON.parse(result); } catch (e) { throw new Error(`Parse error: ${result.substring(0, 100)}...`); }
-
-            if (!Array.isArray(data)) {
-                return { content: [{ type: "text", text: `Detailed info unavailable for ${device}.` }] };
-            }
-
-            const important = data.filter((a: any) =>
-                ["Temperature_Celsius", "Power_On_Hours", "Reallocated_Sector_Ct", "Wear_Leveling_Count"].includes(a.name)
-            );
-
-            const details = important.map((a: any) => `- **${a.name}**: ${a.rawvalue} (${a.valuemax} max)`).join('\n');
-            const temp = data.find((a: any) => a.name === "Temperature_Celsius")?.rawvalue || "Unknown";
-
-            return {
-                content: [{
-                    type: "text",
-                    text: `SMART Details for ${device} (Temp: ${temp}°C):\n${details || "No critical attributes found."}`
-                }]
-            };
-        }
-
-        if (name === "get_raid_status") {
-            // Priority 1: Try /proc/mdstat (safe and universal)
-            const mdstat = await executeOnNas("cat /proc/mdstat");
-
-            if (!mdstat.includes("active")) {
-                return { content: [{ type: "text", text: "No active RAID arrays detected." }] };
-            }
-
-            // Cleanup mdstat output for better readability
-            const cleanMdstat = mdstat.split('\n')
-                .filter(l => l.length > 0 && !l.startsWith('Personalities'))
-                .join('\n');
-
-            return {
-                content: [{
-                    type: "text",
-                    text: `Software RAID Status:\n\`\`\`\n${cleanMdstat}\n\`\`\``
-                }]
-            };
-        }
 
         if (name === "get_top_processes") {
             const { count = 10 } = args as { count?: number };

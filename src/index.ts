@@ -14,6 +14,12 @@ import { McpModule } from "./modules/types.js";
 import { omvModule } from "./modules/omv.js";
 import { dockerModule } from "./modules/docker.js";
 import { crowdsecModule } from "./modules/crowdsec.js";
+import { logsModule } from "./modules/logs.js";
+import { networkModule } from "./modules/network.js";
+import { storageModule } from "./modules/storage.js";
+import { traefikModule } from "./modules/traefik.js";
+import { fail2banModule } from "./modules/fail2ban.js";
+import { nasModule } from "./modules/nas.js";
 
 /**
  * MCP-NAS Server
@@ -22,7 +28,7 @@ import { crowdsecModule } from "./modules/crowdsec.js";
 const server = new Server(
     {
         name: "mcp-nas",
-        version: "0.2.0",
+        version: "1.0.0-beta",
     },
     {
         capabilities: {
@@ -58,19 +64,27 @@ async function executeOnNas(command: string): Promise<string> {
                     return reject(err);
                 }
                 let output = "";
-                let errorOutput = "";
                 stream.on("close", (code: number) => {
                     conn.end();
                     if (code !== 0) {
-                        reject(new Error(`Exit code ${code}: ${errorOutput || output}`));
+                        let errMsg = output.trim();
+                        if (errMsg.includes("sudo: a password is required")) {
+                            errMsg = "Missing sudo privilege for this command. Check setup-mcp-nas.sh whitelist.";
+                        } else if (errMsg.includes("command not found")) {
+                            errMsg = "Command not found on the NAS. Ensure the required tool is installed.";
+                        } else if (errMsg.includes("Permission denied")) {
+                            errMsg = "Permission denied on the NAS.";
+                        }
+                        // Truncate if too long to avoid huge error dumps
+                        if (errMsg.length > 500) errMsg = errMsg.slice(0, 500) + "...";
+                        reject(new Error(`Command failed (Exit ${code}): ${errMsg}`));
                     } else {
-                        const finalOut = (output + (errorOutput ? "\n" + errorOutput : "")).trim();
-                        resolve(finalOut);
+                        resolve(output.trim());
                     }
                 }).on("data", (data: Buffer) => {
                     output += data.toString();
                 }).stderr.on("data", (data: Buffer) => {
-                    errorOutput += data.toString();
+                    output += data.toString();
                 });
             });
         }).on("error", (err) => {
@@ -108,7 +122,7 @@ async function executeOnNas(command: string): Promise<string> {
 /**
  * Available modules
  */
-const allModules: McpModule[] = [omvModule, dockerModule, crowdsecModule];
+const allModules: McpModule[] = [omvModule, dockerModule, crowdsecModule, logsModule, networkModule, storageModule, traefikModule, fail2banModule, nasModule];
 
 /**
  * List available tools by aggregating across supported modules

@@ -1,0 +1,11 @@
+# INSTRUCTION ABSOLUE POUR L'AGENT (AI)
+**Dès l'ouverture d'une session, tu DOIS lire implicitement ce fichier ainsi que le `.cursorrules` parent situé dans `../.cursorrules` pour fusionner les règles locales et globales.**
+
+# Paramètres SSH spécifiques au projet MCP-NAS
+
+Pour ce projet spécifique, combine ces paramètres avec les règles globales du NAS :
+
+- **Utilisateur (NAS_USER)** : `mcp-agent`
+
+Commande standard de connexion pour ce projet :
+`ssh -i C:/Users/cneue/.ssh/id_ed25519 -p 8822 mcp-agent@192.168.1.27`
